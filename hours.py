@@ -46,7 +46,7 @@ def verifyFileExists(csvfilename, fields):
         with open(csvfilename): pass
     except IOError:
         print "Creating new file,", csvfilename
-        with open(csvfilename+"~", 'w') as csvfile:
+        with open(csvfilename, 'w') as csvfile:
             csvwriter = csv.DictWriter(csvfile, delimiter=',', fieldnames=fields)
             csvwriter.writerow(dict((fn,fn) for fn in fields)) #Write header row
 
@@ -90,7 +90,7 @@ def subtractTime(start, end):
         minutes+=60
     #Compensate for crossing over midnight
     if hours < 0 : hours = hours + 24
-    #Use minimum time is less than minimum time
+    #Use minimum time if less than minimum time
     minimumtime = 5
     if hours == 0 and minutes < minimumtime: minutes = minimumtime
     #Add leading 0 to numbers less than 10
@@ -107,7 +107,6 @@ def addTime(time1, time2):
         minutes-=60
     if minutes<10:
         minutes="0"+str(minutes)
-    #Use minimum time is less than minimum time
     return str(hours)+":"+str(minutes)
 
 
@@ -123,18 +122,18 @@ def convertMoney(input):
     #Add zero before digits lower than 10
     if int(cents) < 10 and not cents.startswith('0'): cents="0"+cents
     #Round to two points
-    if int(cents) > 99: cents=str((int(cents)+05)/10)
+    while int(cents) > 99: cents=str((int(cents)+05)/10)
     return dollars+"."+cents
 
 def clockIsOpen(dictarray, verbose):
-    if 'End' not in dictarray[-1] or dictarray[-1]['End'] == '':
-        if verbose == 1: mPrint("Clock opened for", "-bold", "-cyan", dictarray[-1]['Client'], \
-                                "-reset", "with project", "-bold", "-cyan", dictarray[-1]['Project'], dictarray[-1]['Notes'], \
-                                "-reset", "since", "-bold", "-cyan", dictarray[-1]['Start'])
-        return 1
-    else:
-        if verbose == 1: print "No clock is opened"
-        return 0
+    if len(dictarray) > 0:
+        if 'End' not in dictarray[-1] or dictarray[-1]['End'] == '':
+            if verbose == 1: mPrint("Clock opened for", "-bold", "-cyan", dictarray[-1]['Client'], \
+                                    "-reset", "with project", "-bold", "-cyan", dictarray[-1]['Project'], dictarray[-1]['Notes'], \
+                                    "-reset", "since", "-bold", "-cyan", dictarray[-1]['Start'])
+            return 1
+    if verbose == 1: print "No clock is opened"
+    return 0
 
 def searchDict(dictarray):
     searchArray = []
