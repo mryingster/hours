@@ -88,8 +88,11 @@ def subtractTime(start, end):
     while minutes < 0:
         hours-=1
         minutes+=60
+    #Compensate for crossing over midnight
+    if hours < 0 : hours = hours + 24
     #Use minimum time is less than minimum time
-    if hours == 0 and minutes < 3: minutes = 3
+    minimumtime = 5
+    if hours == 0 and minutes < minimumtime: minutes = minimumtime
     #Add leading 0 to numbers less than 10
     if minutes < 10: minutes = '0'+str(minutes)
     return str(hours)+":"+str(minutes)
@@ -126,7 +129,7 @@ def convertMoney(input):
 def clockIsOpen(dictarray, verbose):
     if 'End' not in dictarray[-1] or dictarray[-1]['End'] == '':
         if verbose == 1: mPrint("Clock opened for", "-bold", "-cyan", dictarray[-1]['Client'], \
-                                "-reset", "with project", "-bold", "-cyan", dictarray[-1]['Project'], \
+                                "-reset", "with project", "-bold", "-cyan", dictarray[-1]['Project'], dictarray[-1]['Notes'], \
                                 "-reset", "since", "-bold", "-cyan", dictarray[-1]['Start'])
         return 1
     else:
@@ -151,11 +154,10 @@ def searchByMonth(dictarray):
     defaultMonth = datetime.date(datetime.now()).month
 
     while 1:
-        searchMonth = raw_input("Select month (default is %s): " % defaultMonth)
+        searchMonth = raw_input("Select month (current is %s): " % defaultMonth)
+        if searchMonth == "": searchMonth = str(defaultMonth)
         if int(searchMonth) < 1 or int(searchMonth) > 12:
             print "Invalid selection, %s" % searchMonth
-        elif searchMonth == "":
-            searchMonth = defaultMonth
         else: break
     for dictionary in dictarray:
         # Match digit with or without leading 0... Hacky
@@ -163,27 +165,25 @@ def searchByMonth(dictarray):
             searchArray.append(dictionary)
     printPretty(searchArray)
 
-def printPretty(dictarray):
+def printPrettyHeader():
     #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120
     #                           |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
     mPrint("-bold", "-magenta", "            Start  End    Total      Sub    Multi")
-    mPrint("-bold", "-magenta", "Date        Time   Time   Time  Rate Total  plier Total  Client           Project               Notes            Inv")
-    #                            06/08/2013  07:16  07:24  0:08  24   03.02  1.85  05.76  Client Name      Project Name          Notes            0
-    #                            10        2 5    2 5    2 4   2 2 3  5    2 4   2 5    2 15             2 20                  2 15             2 1
+    mPrint("-bold", "-magenta", "Date        Time   Time   Time  Rate Total  plier Total  Client      Project               Notes                 Inv")
+    #                            06/08/2013  07:16  07:24  0:08  24   03.02  1.85  05.76  Client Name Project Name          Notes                 0
+    #                            10        2 5    2 5    2 4   2 2 3  5    2 4   2 5    2 10        2 20                  2 20                  2 1
+
+def printPretty(dictarray):
+    printPrettyHeader()
 
     total=0.0
     totalInvoiceable=0.0
     totalTime='0:00'
     for i in dictarray:
         if 'End' not in i: continue #Skip non-completed rows...
-        if i['Notes'] == '':
-            print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-15s  %-37s  %-1s" %\
-                (i['Date'], i['Start'], i['End'], i['Total Time'], i['Rate'], i['Sub Total'], i['Multiplier'], \
-                     i['Total'], i['Client'][0:15], i['Project'][0:37], i['Invoiced'])
-        else:
-            print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-15s  %-20s  %-15s  %-1s" %\
-                (i['Date'], i['Start'], i['End'], i['Total Time'], i['Rate'], i['Sub Total'], i['Multiplier'], \
-                     i['Total'], i['Client'][0:15], i['Project'][0:20], i['Notes'][0:15], i['Invoiced'])
+        print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-1s" %\
+            (i['Date'], i['Start'], i['End'], i['Total Time'], i['Rate'], i['Sub Total'], i['Multiplier'], \
+                i['Total'], i['Client'][0:10], i['Project'][0:20], i['Notes'][0:20], i['Invoiced'])
 
         if i['Total'] != '':
             totalTime=addTime(totalTime, i['Total Time'])
@@ -199,9 +199,24 @@ def printPretty(dictarray):
 
     askToSave(dictarray, totalTime, total, totalInvoiceable)
 
+def printPrettyLine(line):
+    print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-1s" %\
+        (line['Date'], line['Start'], line['End'], line['Total Time'], line['Rate'], line['Sub Total'], line['Multiplier'], \
+         line['Total'], line['Client'][0:10], line['Project'][0:20], line['Notes'][0:20], line['Invoiced'])
+
 def askToSave(dictarray, totalTime, total, totalInvoiceable):
     if raw_input("Save to file? (y/n) ") == "y":
-        defaultfilename = "CoastalVectors_Hours_Ending_%s.csv" % getDate('-')
+        #Check to see if invoicing a single client
+        client=[]
+        for i in dictarray:
+            if i['Client'] not in client:
+                client.append(i['Client'])
+        if len(client) > 1:
+            client='CoastalVectors'
+        else:
+            client=client[0]
+
+        defaultfilename = client+"_Hours_Ending_%s.csv" % getDate('-')
         print "Please enter a filename (default is %s)" % defaultfilename
         filename=raw_input("> ")
         if filename == "" : filename=defaultfilename
@@ -215,18 +230,24 @@ def askToSave(dictarray, totalTime, total, totalInvoiceable):
         writeCSV(filename, dictarray, fields)
 
 def invoiceHours(dictarray):
+    # Ask which client to invoice, 'a' for all
+    client=userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
+    if client == '': client = 'a'
+
     # Copy uninvoiced lines to new array, print uninvoiced lines
     invoicableArray=[]
     for i in dictarray:
         if i['Invoiced'] == '0' and 'End' in i:
-            invoicableArray.append(i)
+            if client == 'a' or client == i['Client']:
+                invoicableArray.append(i)
     printPretty(invoicableArray)
 
     # Mark lines as invoiced after exporting file, return array
     if raw_input('Mark lines as invoiced? (y/n): ') == 'y':
         for i in dictarray:
             if i['Invoiced'] == '0' and 'End' in i:
-                i.update({'Invoiced':'1'})
+                if client == 'a' or client == i['Client']:
+                    i.update({'Invoiced':'1'})
     return dictarray
 
 def getClients(dictarray):
@@ -243,6 +264,15 @@ def getProjects(dictarray, client):
             if not i['Project'] in projects:
                 projects.append(i['Project'])
     return projects
+
+def getNotes(dictarray, client, project):
+    notes=[]
+    for i in dictarray:
+        if i['Client'] == client:
+            if i['Project'] == project:
+                if not i['Notes'] in notes:
+                    notes.append(i['Notes'])
+    return notes
 
 def userInput(message, commands):
     import readline
@@ -266,13 +296,20 @@ def startEntry(dictarray, quick):
     #creat new row
     newrow={}
 
-    if quick == 1:
-        rate=dictarray[-1]['Rate']
-    else:
-        rate=raw_input("Rate: ")
     client=userInput("Client", getClients(dictarray))
     project=userInput("Project", getProjects(dictarray, client))
-    notes=raw_input("Notes: ")
+    notes=userInput("Notes", getNotes(dictarray, client, project))
+    rate="0"
+
+    #See if hours has been defined for this client
+    if quick == 1:
+        for old in range(len(dictarray)-1, -1, -1):
+            if dictarray[old]['Client'] == client:
+                rate=dictarray[old]['Rate']
+                break
+
+    if rate == "0":
+        rate=raw_input("Rate: ")
 
     newrow.update({'Date':getDate()})
     newrow.update({'Start':getTime()})
@@ -288,10 +325,20 @@ def calculateEntry(start, end, rate, multiplier):
     appendrow={}
     appendrow.update({'End':end})
     appendrow.update({'Total Time':subtractTime(start, appendrow['End'])})
-    appendrow.update({'Sub Total':multiplyTime(appendrow['Total Time'], int(rate))})
+    appendrow.update({'Sub Total':multiplyTime(appendrow['Total Time'], float(rate))})
     appendrow.update({'Multiplier':multiplier})
     appendrow.update({'Total':convertMoney(float(appendrow['Sub Total'])*float(multiplier))})
     return appendrow
+
+def recalculateArray(dictarray):
+    for row in dictarray:
+        row.update(calculateEntry(row['Start'],row['End'],row['Rate'],row['Multiplier']))
+    return dictarray
+
+def resortArray(dictarray):
+    import datetime
+    resortedarray=sorted(dictarray, key=lambda row: datetime.datetime.strptime(row["Date"], "%m/%d/%Y"))
+    return resortedarray
 
 def closeEntry(dictarray, quick):
     print "Closing Entry..."
@@ -307,16 +354,16 @@ def closeEntry(dictarray, quick):
     appendrow.update(calculateEntry(start, end, rate, multiplier))
     return appendrow
 
-def editEntry(dictarray, fields):
+def editEntry(dictarray, fields, line):
     appendrow={}
     for field in fields:
         if field in ['Total Time','Sub Total','Total']: continue #skip calculated fields
-        print "Enter new value for", field, "(current value:", dictarray[-1][field]+")"
+        print "Enter new value for", field, "(current value:", dictarray[line][field]+")"
         input=raw_input("> ")
         if input!='':
             appendrow.update({field:input})
         else:
-            appendrow.update({field:dictarray[-1][field]})
+            appendrow.update({field:dictarray[line][field]})
 
     #Recalculate values if clock is closed
     if appendrow['End'] != '':
@@ -325,15 +372,36 @@ def editEntry(dictarray, fields):
     printPretty([appendrow])
     return appendrow
 
+def selectEntryToEdit(dictarray, fields):
+    printPrettyHeader()
+    for i in range(len(dictarray)):
+        print i,
+        printPrettyLine(dictarray[i])
+
+    default=len(dictarray)-1
+
+    while 1:
+        selection=raw_input("Select line to edit (default is %i): " % default)
+        if selection == "":
+            selection=default
+            break
+        selection=int(selection)
+        if selection < 0 or selection > default:
+            print "Invalid selection"
+        else:
+            break
+
+    dictarray[selection].update(editEntry(dictarray, fields, selection))
+    return dictarray
 
 def additionalCommands():
     mPrint("-bold", "-yellow", "\nAdditional Commands:")
-    mPrint("-bold", " e)", "-reset", "Edit last entry")
-   #mPrint("-bold", " w)", "-reset", "Print weekly hours")
-    mPrint("-bold", " m)", "-reset", "Print hours by month")
+    mPrint("-bold", " e)", "-reset", "Edit an entry")
     mPrint("-bold", " a)", "-reset", "Print all hours")
+    mPrint("-bold", " m)", "-reset", "Print hours by month")
     mPrint("-bold", " s)", "-reset", "Search")
-    mPrint("-bold", " r)", "-reset", "Reload hours")
+    mPrint("-bold", " u)", "-reset", "Update hours from CSV file")
+    mPrint("-bold", " r)", "-reset", "Re-calculate and re-sortCSV File")
     print ""
     return
 
@@ -349,7 +417,7 @@ def main(csvfilename, dictarray, fields):
         mPrint("-bold", " ?)", "-reset", "Additional commands")
         mPrint("-bold", " q)", "-reset", "Quit")
         print ""
-        Selection=raw_input("> ")
+        Selection=raw_input("> ").lower()
 
         if Selection == "q":
             quit()
@@ -360,7 +428,7 @@ def main(csvfilename, dictarray, fields):
             if clockIsOpen(dictarray, 0): dictarray[-1].update(closeEntry(dictarray, 0))
             else: print "No clock to close"
         elif Selection == "e":
-            dictarray[-1].update(editEntry(dictarray, fields))
+            dictarray = selectEntryToEdit(dictarray, fields)
         elif Selection == "i":
             dictarray=invoiceHours(dictarray)
         elif Selection == "a":
@@ -369,10 +437,13 @@ def main(csvfilename, dictarray, fields):
             searchDict(dictarray)
         elif Selection == "m":
             searchByMonth(dictarray)
-        elif Selection == "r":
-            dictarray = readCSV(csvfilename)
         elif Selection == "?":
             additionalCommands()
+        elif Selection == "r":
+            dictarray = recalculateArray(dictarray)
+            dictarray = resortArray(dictarray)
+        elif Selection == "u":
+            dictarray = readCSV(csvfilename)
         else:
             print "Unknown selection..."
         #After each command, write to file...
