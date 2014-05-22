@@ -148,9 +148,10 @@ def searchDict(dictarray):
 
 def searchByMonth(dictarray):
     searchArray = []
-    searchMonth = 0
+    searchMonth, searchYear = 0, 0
     from datetime import datetime
     defaultMonth = datetime.date(datetime.now()).month
+    defaultYear = datetime.date(datetime.now()).year
 
     while 1:
         searchMonth = raw_input("Select month (current is %s): " % defaultMonth)
@@ -158,9 +159,17 @@ def searchByMonth(dictarray):
         if int(searchMonth) < 1 or int(searchMonth) > 12:
             print "Invalid selection, %s" % searchMonth
         else: break
+
+    while 1:
+        searchYear = raw_input("Select year (current is %s): " % defaultYear)
+        if searchYear == "": searchYear = str(defaultYear)
+        if int(searchYear) < 1970 or int(searchYear) > defaultYear:
+            print "Invalid selection, %s" % searchYear
+        else: break
+
     for dictionary in dictarray:
-        # Match digit with or without leading 0... Hacky
-        if dictionary['Date'].startswith(str(searchMonth)) or dictionary['Date'].startswith('0'+str(searchMonth)):
+        import re
+        if re.compile('%s/.+/%s'%(searchMonth, searchYear)).match(dictionary['Date']):
             searchArray.append(dictionary)
     printPretty(searchArray)
 
