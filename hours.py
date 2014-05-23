@@ -103,10 +103,10 @@ def addTime(time1, time2):
     hours=int(time2hours)+int(time1hours)
     minutes=int(time2minutes)+int(time1minutes)
     while minutes > 59:
-        hours+=1
-        minutes-=60
-    if minutes<10:
-        minutes="0"+str(minutes)
+        hours += 1
+        minutes -= 60
+    if minutes < 10:
+        minutes = "0"+str(minutes)
     return str(hours)+":"+str(minutes)
 
 
@@ -177,7 +177,7 @@ def printPrettyHeader():
     #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120
     #                           |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
     mPrint("-bold", "-magenta", "            Start  End    Total      Sub    Multi")
-    mPrint("-bold", "-magenta", "Date        Time   Time   Time  Rate Total  plier Total  Client      Project               Notes                 Inv")
+    mPrint("-bold", "-magenta", "Date        Time   Time   Time  Rate Total  plier Total  Client      Project               Notes                 Invoice")
     #                            06/08/2013  07:16  07:24  0:08  24   03.02  1.85  05.76  Client Name Project Name          Notes                 0
     #                            10        2 5    2 5    2 4   2 2 3  5    2 4   2 5    2 10        2 20                  2 20                  2 1
 
@@ -200,7 +200,7 @@ def printPretty(dictarray):
                 totalInvoiceable+=float(i['Total'])
 
     print ""
-    print "\t       Total Time: %s" %  totalTime
+    print "\t       Total Time: %s"  %  totalTime
     print "\t            Total: $%s" %  total
     print "\tTotal Invoiceable: $%s" %  totalInvoiceable
     print ""
@@ -220,11 +220,11 @@ def askToSave(dictarray, totalTime, total, totalInvoiceable):
             if i['Client'] not in client:
                 client.append(i['Client'])
         if len(client) > 1:
-            client='CoastalVectors'
+            client=''
         else:
-            client=client[0]
+            client=client[0]+"_"
 
-        defaultfilename = client+"_Hours_Ending_%s.csv" % getDate('-')
+        defaultfilename = "Invoice_%s_%s%s.csv" % (getInvoiceNum(dictarray), client, getDate('-'))
         print "Please enter a filename (default is %s)" % defaultfilename
         filename=raw_input("> ")
         if filename == "" : filename=defaultfilename
@@ -237,9 +237,17 @@ def askToSave(dictarray, totalTime, total, totalInvoiceable):
 
         writeCSV(filename, dictarray, fields)
 
+def getInvoiceNum(dictarray):
+    InvoiceNum = 0
+    for i in dictarray:
+        if int(i['Invoiced']) > InvoiceNum:
+            InvoiceNum = int(i['Invoiced'])
+    return InvoiceNum
+
 def invoiceHours(dictarray):
     # Ask which client to invoice, 'a' for all
-    client=userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
+    InvoiceNum = str(getInvoiceNum(dictarray)+1)
+    client = userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
     if client == '': client = 'a'
 
     # Copy uninvoiced lines to new array, print uninvoiced lines
@@ -248,14 +256,17 @@ def invoiceHours(dictarray):
         if i['Invoiced'] == '0' and 'End' in i:
             if client == 'a' or client == i['Client']:
                 invoicableArray.append(i)
+    for j in invoicableArray:
+        j.update({'Invoiced':str(InvoiceNum)})
     printPretty(invoicableArray)
 
     # Mark lines as invoiced after exporting file, return array
-    if raw_input('Mark lines as invoiced? (y/n): ') == 'y':
+    if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
         for i in dictarray:
-            if i['Invoiced'] == '0' and 'End' in i:
+            if i['Invoiced'] == InvoiceNum and 'End' in i:
                 if client == 'a' or client == i['Client']:
-                    i.update({'Invoiced':'1'})
+                    i.update({'Invoiced':'0'})
+
     return dictarray
 
 def getClients(dictarray):
