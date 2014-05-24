@@ -74,8 +74,6 @@ def getTime():
     return str(hours)+":"+str(minutes)
 
 def getDate(separator='/'):
-#    if separator[0] == '': separator='/'
-#    else: separator = str(separator[0])
     from datetime import datetime
     date = datetime.date(datetime.now())
     return str(date.month)+separator+str(date.day)+separator+str(date.year)
@@ -174,12 +172,12 @@ def searchByMonth(dictarray):
     printPretty(searchArray)
 
 def printPrettyHeader():
-    #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120
-    #                           |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
+    #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120  125
+    #                           |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
     mPrint("-bold", "-magenta", "            Start  End    Total      Sub    Multi")
-    mPrint("-bold", "-magenta", "Date        Time   Time   Time  Rate Total  plier Total  Client      Project               Notes                 Invoice")
+    mPrint("-bold", "-magenta", "Date        Time   Time   Time  Rate Total  plier Total  Client      Project               Notes                 Inv. Paid")
     #                            06/08/2013  07:16  07:24  0:08  24   03.02  1.85  05.76  Client Name Project Name          Notes                 0
-    #                            10        2 5    2 5    2 4   2 2 3  5    2 4   2 5    2 10        2 20                  2 20                  2 1
+    #                            10        2 5    2 5    2 4   2 2 3  5    2 4   2 5    2 10        2 20                  2 20                  2 4 1  No
 
 def printPretty(dictarray):
     printPrettyHeader()
@@ -189,14 +187,12 @@ def printPretty(dictarray):
     totalTime='0:00'
     for i in dictarray:
         if 'End' not in i: continue #Skip non-completed rows...
-        print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-1s" %\
-            (i['Date'], i['Start'], i['End'], i['Total Time'], i['Rate'], i['Sub Total'], i['Multiplier'], \
-                i['Total'], i['Client'][0:10], i['Project'][0:20], i['Notes'][0:20], i['Invoiced'])
+        printPrettyLine(i)
 
         if i['Total'] != '':
             totalTime=addTime(totalTime, i['Total Time'])
             total+=float(i['Total'])
-            if i['Invoiced'] == '0':
+            if i['Invoice'] == '0':
                 totalInvoiceable+=float(i['Total'])
 
     print ""
@@ -208,9 +204,9 @@ def printPretty(dictarray):
     askToSave(dictarray, totalTime, total, totalInvoiceable)
 
 def printPrettyLine(line):
-    print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-1s" %\
+    print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-4s %s" %\
         (line['Date'], line['Start'], line['End'], line['Total Time'], line['Rate'], line['Sub Total'], line['Multiplier'], \
-         line['Total'], line['Client'][0:10], line['Project'][0:20], line['Notes'][0:20], line['Invoiced'])
+         line['Total'], line['Client'][0:10], line['Project'][0:20], line['Notes'][0:20], line['Invoice'], line['Paid'])
 
 def askToSave(dictarray, totalTime, total, totalInvoiceable):
     if raw_input("Save to file? (y/n) ") == "y":
@@ -240,8 +236,8 @@ def askToSave(dictarray, totalTime, total, totalInvoiceable):
 def getInvoiceNum(dictarray):
     InvoiceNum = 0
     for i in dictarray:
-        if int(i['Invoiced']) > InvoiceNum:
-            InvoiceNum = int(i['Invoiced'])
+        if int(i['Invoice']) > InvoiceNum:
+            InvoiceNum = int(i['Invoice'])
     return InvoiceNum
 
 def invoiceHours(dictarray):
@@ -253,19 +249,19 @@ def invoiceHours(dictarray):
     # Copy uninvoiced lines to new array, print uninvoiced lines
     invoicableArray=[]
     for i in dictarray:
-        if i['Invoiced'] == '0' and 'End' in i:
+        if i['Invoice'] == '0' and 'End' in i:
             if client == 'a' or client == i['Client']:
                 invoicableArray.append(i)
     for j in invoicableArray:
-        j.update({'Invoiced':str(InvoiceNum)})
+        j.update({'Invoice':str(InvoiceNum)})
     printPretty(invoicableArray)
 
     # Mark lines as invoiced after exporting file, return array
     if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
         for i in dictarray:
-            if i['Invoiced'] == InvoiceNum and 'End' in i:
+            if i['Invoice'] == InvoiceNum and 'End' in i:
                 if client == 'a' or client == i['Client']:
-                    i.update({'Invoiced':'0'})
+                    i.update({'Invoice':'0'})
 
     return dictarray
 
@@ -336,7 +332,8 @@ def startEntry(dictarray, quick):
     newrow.update({'Client':client})
     newrow.update({'Project':project})
     newrow.update({'Notes':notes})
-    newrow.update({'Invoiced':'0'})
+    newrow.update({'Invoice':'0'})
+    newrow.update({'Paid':'No'})
 
     return newrow
 
@@ -413,6 +410,33 @@ def selectEntryToEdit(dictarray, fields):
     dictarray[selection].update(editEntry(dictarray, fields, selection))
     return dictarray
 
+def printOutstanding(dictarray):
+    temparray=[]
+    for i in dictarray:
+        if i['Paid'] == 'No':
+            temparray.append(i)
+    printPretty(temparray)
+    return
+
+def markInvoicesPaid(dictarray):
+    uninvoiced=[]
+    for i in dictarray:
+        if i['Paid'] == 'No' and i['Invoice'] not in uninvoiced:
+            uninvoiced.append(i['Invoice'])
+
+    mPrint("-bold", "Outstanding Invoices")
+    for i in uninvoiced:
+        print i
+
+    selection=raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
+    if selection == "" : selection = uninvoiced[-1]
+
+    for i in dictarray:
+        if i['Invoice'] == selection:
+            i.update({'Paid':'Yes'})
+
+    return dictarray
+
 def additionalCommands():
     mPrint("-bold", "-yellow", "\nAdditional Commands:")
     mPrint("-bold", " e)", "-reset", "Edit an entry")
@@ -430,9 +454,11 @@ def main(csvfilename, dictarray, fields):
         print ""
         clockIsOpen(dictarray, 1)
         mPrint("-bold", "-yellow", "\nPlease select option:")
-        mPrint("-bold", " n)", "-reset", "New clock")
+        mPrint("-bold", " n)", "-reset", "Start New clock")
         mPrint("-bold", " c)", "-reset", "Close clock")
-        mPrint("-bold", " i)", "-reset", "Print uninvoiced hours")
+        mPrint("-bold", " i)", "-reset", "Show uninvoiced hours")
+        mPrint("-bold", " o)", "-reset", "Show outstanding invoices")
+        mPrint("-bold", " p)", "-reset", "Mark invoices number as paid")
         mPrint("-bold", " ?)", "-reset", "Additional commands")
         mPrint("-bold", " q)", "-reset", "Quit")
         print ""
@@ -456,6 +482,10 @@ def main(csvfilename, dictarray, fields):
             searchDict(dictarray)
         elif Selection == "m":
             searchByMonth(dictarray)
+        elif Selection == "p":
+            dictarray = markInvoicesPaid(dictarray)
+        elif Selection == "o":
+            printOutstanding(dictarray)
         elif Selection == "?":
             additionalCommands()
         elif Selection == "r":
@@ -470,7 +500,7 @@ def main(csvfilename, dictarray, fields):
 
 #Variables
 csvfilename='hours.csv'
-fields=['Date', 'Start', 'End', 'Total Time', 'Rate', 'Sub Total', 'Multiplier', 'Total', 'Client', 'Project', 'Notes', 'Invoiced']
+fields=['Date', 'Start', 'End', 'Total Time', 'Rate', 'Sub Total', 'Multiplier', 'Total', 'Client', 'Project', 'Notes', 'Invoice', 'Paid']
 verifyFileExists(csvfilename, fields)
 
 #Import hours from file
