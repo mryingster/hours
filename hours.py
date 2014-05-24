@@ -142,7 +142,7 @@ def searchDict(dictarray):
                 searchArray.append(dictionary)
                 #print "Found", searchterm, "in", dictionary
                 break
-    printPretty(searchArray)
+    return(searchArray)
 
 def searchByMonth(dictarray):
     searchArray = []
@@ -169,7 +169,22 @@ def searchByMonth(dictarray):
         import re
         if re.compile('%s/.+/%s'%(searchMonth, searchYear)).match(dictionary['Date']):
             searchArray.append(dictionary)
-    printPretty(searchArray)
+    return(searchArray)
+
+def calculateTotals(dictarray):
+    total=0.0
+    totalInvoiceable=0.0
+    totalTime='0:00'
+
+    for i in dictarray:
+        if 'End' not in i: continue #Skip non-completed rows...
+        if i['Total'] != '':
+            totalTime=addTime(totalTime, i['Total Time'])
+            total+=float(i['Total'])
+            if i['Invoice'] == '0':
+                totalInvoiceable+=float(i['Total'])
+
+    return totalTime, total, totalInvoiceable
 
 def printPrettyHeader():
     #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120  125
@@ -181,19 +196,11 @@ def printPrettyHeader():
 
 def printPretty(dictarray):
     printPrettyHeader()
+    totalTime, total, totalInvoiceable = calculateTotals(dictarray)
 
-    total=0.0
-    totalInvoiceable=0.0
-    totalTime='0:00'
     for i in dictarray:
         if 'End' not in i: continue #Skip non-completed rows...
         printPrettyLine(i)
-
-        if i['Total'] != '':
-            totalTime=addTime(totalTime, i['Total Time'])
-            total+=float(i['Total'])
-            if i['Invoice'] == '0':
-                totalInvoiceable+=float(i['Total'])
 
     print ""
     print "\t       Total Time: %s"  %  totalTime
@@ -201,14 +208,12 @@ def printPretty(dictarray):
     print "\tTotal Invoiceable: $%s" %  totalInvoiceable
     print ""
 
-    askToSave(dictarray, totalTime, total, totalInvoiceable)
-
 def printPrettyLine(line):
     print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-4s %s" %\
         (line['Date'], line['Start'], line['End'], line['Total Time'], line['Rate'], line['Sub Total'], line['Multiplier'], \
          line['Total'], line['Client'][0:10], line['Project'][0:20], line['Notes'][0:20], line['Invoice'], line['Paid'])
 
-def askToSave(dictarray, totalTime, total, totalInvoiceable):
+def askToSave(dictarray):
     if raw_input("Save to file? (y/n) ") == "y":
         #Check to see if invoicing a single client
         client=[]
@@ -226,6 +231,7 @@ def askToSave(dictarray, totalTime, total, totalInvoiceable):
         if filename == "" : filename=defaultfilename
 
         #Add rows for invoicing
+        totalTime, total, totalInvoiceable = calculateTotals(dictarray)
         dictarray.append({})
         dictarray.append({'Multiplier':'Total Time:','Total':totalTime})
         dictarray.append({'Multiplier':'Total:','Total':total})
@@ -255,6 +261,7 @@ def invoiceHours(dictarray):
     for j in invoicableArray:
         j.update({'Invoice':str(InvoiceNum)})
     printPretty(invoicableArray)
+    askToSave(invoicableArray)
 
     # Mark lines as invoiced after exporting file, return array
     if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
@@ -385,7 +392,6 @@ def editEntry(dictarray, fields, line):
     if appendrow['End'] != '':
         if appendrow['Multiplier'] == "" : appendrow.update({'Multiplier':"1.0"}) #Make it default value if unspecified
         appendrow.update(calculateEntry(appendrow['Start'], appendrow['End'], appendrow['Rate'], appendrow['Multiplier']))
-    printPretty([appendrow])
     return appendrow
 
 def selectEntryToEdit(dictarray, fields):
@@ -407,16 +413,16 @@ def selectEntryToEdit(dictarray, fields):
         else:
             break
 
-    dictarray[selection].update(editEntry(dictarray, fields, selection))
-    return dictarray
+    newRow = editEntry(dictarray, fields, selection)
+    dictarray[selection].update(newRow)
+    return dictarray, newRow
 
 def printOutstanding(dictarray):
     temparray=[]
     for i in dictarray:
         if i['Paid'] == 'No':
             temparray.append(i)
-    printPretty(temparray)
-    return
+    return temparray
 
 def markInvoicesPaid(dictarray):
     uninvoiced=[]
@@ -427,6 +433,7 @@ def markInvoicesPaid(dictarray):
     mPrint("-bold", "Outstanding Invoices")
     for i in uninvoiced:
         print i
+    print
 
     selection=raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
     if selection == "" : selection = uninvoiced[-1]
@@ -456,7 +463,7 @@ def main(csvfilename, dictarray, fields):
         mPrint("-bold", "-yellow", "\nPlease select option:")
         mPrint("-bold", " n)", "-reset", "Start New clock")
         mPrint("-bold", " c)", "-reset", "Close clock")
-        mPrint("-bold", " i)", "-reset", "Show uninvoiced hours")
+        mPrint("-bold", " i)", "-reset", "Invoiced hours")
         mPrint("-bold", " o)", "-reset", "Show outstanding invoices")
         mPrint("-bold", " p)", "-reset", "Mark invoices number as paid")
         mPrint("-bold", " ?)", "-reset", "Additional commands")
@@ -466,32 +473,39 @@ def main(csvfilename, dictarray, fields):
 
         if Selection == "q":
             quit()
-        elif Selection == "n":
+        elif Selection == "n": # New
             if clockIsOpen(dictarray, 0): dictarray[-1].update(closeEntry(dictarray, 1))
             dictarray.append(startEntry(dictarray, 1))
-        elif Selection == "c":
+        elif Selection == "c": # Close
             if clockIsOpen(dictarray, 0): dictarray[-1].update(closeEntry(dictarray, 0))
             else: print "No clock to close"
-        elif Selection == "e":
-            dictarray = selectEntryToEdit(dictarray, fields)
-        elif Selection == "i":
+        elif Selection == "e": # Edit
+            dictarray, temparray = selectEntryToEdit(dictarray, fields)
+            printPretty([temparray])
+        elif Selection == "i": # Invoice hours
             dictarray=invoiceHours(dictarray)
-        elif Selection == "a":
+        elif Selection == "a": # Print all hours
             printPretty(dictarray)
-        elif Selection == "s":
-            searchDict(dictarray)
-        elif Selection == "m":
-            searchByMonth(dictarray)
-        elif Selection == "p":
+        elif Selection == "s": # Search
+            temparray = searchDict(dictarray)
+            printPretty(temparray)
+            askToSave(temparray)
+        elif Selection == "m": # Print by month
+            temparray = searchByMonth(dictarray)
+            printPretty(temparray)
+            askToSave(temparray)
+        elif Selection == "p": # Mark as paid
             dictarray = markInvoicesPaid(dictarray)
-        elif Selection == "o":
-            printOutstanding(dictarray)
-        elif Selection == "?":
+        elif Selection == "o": # Print outstanding invoices
+            temparray = printOutstanding(dictarray)
+            printPretty(temparray)
+            askToSave(temparray)
+        elif Selection == "?": # Additional Commands
             additionalCommands()
-        elif Selection == "r":
+        elif Selection == "r": # Resort, Recalc
             dictarray = recalculateArray(dictarray)
             dictarray = resortArray(dictarray)
-        elif Selection == "u":
+        elif Selection == "u": # Update CSV File
             dictarray = readCSV(csvfilename)
         else:
             print "Unknown selection..."
