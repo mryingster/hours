@@ -420,14 +420,14 @@ def selectEntryToEdit(dictarray, fields):
 def printOutstanding(dictarray):
     temparray=[]
     for i in dictarray:
-        if i['Paid'] == 'No':
+        if i['Paid'] == 'No' and i['Invoice'] != '0':
             temparray.append(i)
     return temparray
 
 def markInvoicesPaid(dictarray):
     uninvoiced=[]
     for i in dictarray:
-        if i['Paid'] == 'No' and i['Invoice'] not in uninvoiced:
+        if i['Paid'] == 'No' and i['Invoice'] not in uninvoiced and i['Invoice'] != '0':
             uninvoiced.append(i['Invoice'])
 
     mPrint("-bold", "Outstanding Invoices")
@@ -437,6 +437,9 @@ def markInvoicesPaid(dictarray):
 
     selection=raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
     if selection == "" : selection = uninvoiced[-1]
+    if selection not in uninvoiced:
+        print "Not a valid invoice number."
+        return dictarray
 
     for i in dictarray:
         if i['Invoice'] == selection:
