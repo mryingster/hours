@@ -434,15 +434,30 @@ def printOutstanding(dictarray):
         printPretty(temparray)
     return
 
+def dateCompare(date1, date2): #Returns 2 dates with older date first
+    from datetime import date
+    [month1, day1, year1] = map(int, date1.split('/'))
+    [month2, day2, year2] = map(int, date2.split('/'))
+    tdate1 = date(year1, month1, day1)
+    tdate2 = date(year2, month2, day2)
+    if tdate1 < tdate2:
+        return date1, date2
+    else:
+        return date2, date1
+
 def markInvoicesPaid(dictarray):
-    uninvoiced=[]
-    for i in dictarray:
-        if i['Paid'] == 'No' and i['Invoice'] not in uninvoiced and i['Invoice'] != '0':
-            uninvoiced.append(i['Invoice'])
+    uninvoiced = getOutstanding(dictarray)
 
     mPrint("-bold", "Outstanding Invoices")
     for i in uninvoiced:
-        print i
+        total = 0
+        dateStart, dateEnd = "1/1/9999", "1/1/1970"
+        for row in dictarray:
+            if row['Invoice'] == i:
+                dateStart = dateCompare(dateStart, row['Date'])[0]
+                dateEnd = dateCompare(dateEnd, row['Date'])[1]
+                total += float(row['Total'])
+        print "#%s\t(%s-%s,\t$%6.2f)" % ( i, dateStart, dateEnd, total)
     print
 
     selection=raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
