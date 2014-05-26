@@ -417,12 +417,22 @@ def selectEntryToEdit(dictarray, fields):
     dictarray[selection].update(newRow)
     return dictarray, newRow
 
-def printOutstanding(dictarray):
-    temparray=[]
+def getOutstanding(dictarray):
+    temparray = []
     for i in dictarray:
-        if i['Paid'] == 'No' and i['Invoice'] != '0':
-            temparray.append(i)
+        if i['Paid'] == 'No' and i['Invoice'] != '0' and i['Invoice'] not in temparray:
+            temparray.append(i['Invoice'])
     return temparray
+
+def printOutstanding(dictarray):
+    outstanding = getOutstanding(dictarray)
+    for invoice in outstanding:
+        temparray = []
+        for row in dictarray:
+            if row['Invoice'] == invoice:
+                temparray.append(row)
+        printPretty(temparray)
+    return
 
 def markInvoicesPaid(dictarray):
     uninvoiced=[]
@@ -500,9 +510,7 @@ def main(csvfilename, dictarray, fields):
         elif Selection == "p": # Mark as paid
             dictarray = markInvoicesPaid(dictarray)
         elif Selection == "o": # Print outstanding invoices
-            temparray = printOutstanding(dictarray)
-            printPretty(temparray)
-            askToSave(temparray)
+            printOutstanding(dictarray)
         elif Selection == "?": # Additional Commands
             additionalCommands()
         elif Selection == "r": # Resort, Recalc
