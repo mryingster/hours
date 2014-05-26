@@ -78,6 +78,12 @@ def getDate(separator='/'):
     date = datetime.date(datetime.now())
     return str(date.month)+separator+str(date.day)+separator+str(date.year)
 
+def fixDate(datein):
+    from datetime import date
+    [month, day, year] = map(int, datein.split('/'))
+    if year < 100 : year += 2000
+    return "%s/%s/%s" % (month, day, year)
+
 def subtractTime(start, end):
     starthours, startminutes = start.split(":")
     endhours, endminutes = end.split(":")
@@ -356,6 +362,7 @@ def calculateEntry(start, end, rate, multiplier):
 def recalculateArray(dictarray):
     for row in dictarray:
         row.update(calculateEntry(row['Start'],row['End'],row['Rate'],row['Multiplier']))
+        row.update({'Date':fixDate(row['Date'])})
     return dictarray
 
 def resortArray(dictarray):
@@ -436,6 +443,7 @@ def printOutstanding(dictarray):
 
 def dateCompare(date1, date2): #Returns 2 dates with older date first
     from datetime import date
+    date1, date2 = fixDate(date1), fixDate(date2)
     [month1, day1, year1] = map(int, date1.split('/'))
     [month2, day2, year2] = map(int, date2.split('/'))
     tdate1 = date(year1, month1, day1)
