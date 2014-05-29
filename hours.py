@@ -50,6 +50,8 @@ def verifyFileExists(csvfilename, fields):
             csvwriter = csv.DictWriter(csvfile, delimiter=',', fieldnames=fields)
             csvwriter.writerow(dict((fn,fn) for fn in fields)) #Write header row
 
+#### CSV Operations ####
+
 def readCSV(csvfilename):
     dictarray = []
     with open(csvfilename, 'rb') as csvfile:
@@ -86,6 +88,8 @@ def writeCSV(csvfilename, dictarray, fields, header=""):
         csvfile.close()
         return
 
+#### Date and Time Operations ####
+
 def getTime():
     from datetime import datetime
     time = datetime.time(datetime.now())
@@ -104,6 +108,18 @@ def fixDate(datein):
     [month, day, year] = map(int, datein.split('/'))
     if year < 100 : year += 2000
     return "%s/%s/%s" % (month, day, year)
+
+def dateCompare(date1, date2): #Returns 2 dates with older date first
+    from datetime import date
+    date1, date2 = fixDate(date1), fixDate(date2)
+    [month1, day1, year1] = map(int, date1.split('/'))
+    [month2, day2, year2] = map(int, date2.split('/'))
+    tdate1 = date(year1, month1, day1)
+    tdate2 = date(year2, month2, day2)
+    if tdate1 < tdate2:
+        return date1, date2
+    else:
+        return date2, date1
 
 def subtractTime(start, end):
     starthours, startminutes = start.split(":")
@@ -134,12 +150,13 @@ def addTime(time1, time2):
         minutes = "0"+str(minutes)
     return str(hours)+":"+str(minutes)
 
-
 def multiplyTime(delta, rate):
     hours, minutes = delta.split(":")
     decimaltime=float(minutes)/60.0+float(hours)
     return convertMoney(decimaltime*rate)
     #return decimaltime*rate
+
+#### Money Operations ####
 
 def convertMoney(input):
     input=str(input)
@@ -213,6 +230,8 @@ def calculateTotals(dictarray, invoiceable):
 
     return totalTime, total, totalInvoiceable
 
+#### Print to Screen Operations ####
+
 def printPrettyHeader():
     #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120  125
     #                           |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
@@ -240,68 +259,7 @@ def printPrettyLine(line):
         (line['Date'], line['Start'], line['End'], line['Total Time'], line['Rate'], line['Sub Total'], line['Multiplier'], \
          line['Total'], line['Client'][0:10], line['Project'][0:20], line['Notes'][0:20], line['Invoice'], line['Paid'])
 
-def askToSave(dictarray, fields, header, invoiceable='0'):
-    if raw_input("Save to file? (y/n) ") == "y":
-        #Check to see if invoicing a single client
-        client=[]
-        for i in dictarray:
-            if i['Client'] not in client:
-                client.append(i['Client'])
-        if len(client) > 1:
-            client=''
-        else:
-            client=client[0]+"_"
-
-        defaultfilename = "Invoice_%s_%s%s.csv" % (getInvoiceNum(dictarray), client, getDate('-'))
-        print "Please enter a filename (default is %s)" % defaultfilename
-        filename=raw_input("> ")
-        if filename == "" : filename=defaultfilename
-
-        #Add rows for invoicing
-        totalTime, total, totalInvoiceable = calculateTotals(dictarray, invoiceable)
-        dictarray.append({})
-        dictarray.append({'Multiplier':'Total Time:','Total':totalTime})
-        dictarray.append({'Multiplier':'Total:','Total':total})
-        dictarray.append({'Multiplier':'Total Invoiceable:','Total':totalInvoiceable})
-
-        writeCSV(filename, dictarray, fields, header)
-
-def getInvoiceNum(dictarray):
-    InvoiceNum = 0
-    for i in dictarray:
-        if int(i['Invoice']) > InvoiceNum:
-            InvoiceNum = int(i['Invoice'])
-    return InvoiceNum
-
-def invoiceHours(dictarray, fields):
-    # Ask which client to invoice, 'a' for all
-    InvoiceNum = str(getInvoiceNum(dictarray)+1)
-    client = userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
-    if client == '': client = 'a'
-
-    # Copy uninvoiced lines to new array, print uninvoiced lines
-    invoicableArray=[]
-    for i in dictarray:
-        if i['Invoice'] == '0' and 'End' in i:
-            if client == 'a' or client == i['Client']:
-                invoicableArray.append(i)
-    for j in invoicableArray:
-        j.update({'Invoice':str(InvoiceNum)})
-    printPretty(invoicableArray, InvoiceNum)
-
-    company="CoastalVectors.com"
-    header=company+",,,,,,,,,Invoice #,"+str(InvoiceNum)
-    abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
-    askToSave(invoicableArray, abrFields, header, InvoiceNum)
-
-    # Mark lines as invoiced after exporting file, return array
-    if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
-        for i in dictarray:
-            if i['Invoice'] == InvoiceNum and 'End' in i:
-                if client == 'a' or client == i['Client']:
-                    i.update({'Invoice':'0'})
-
-    return dictarray
+#### Auto-Complete, and User Input Functions ####
 
 def getClients(dictarray):
     clients=[]
@@ -344,6 +302,34 @@ def userInput(message, commands):
     readline.parse_and_bind("tab: complete")
     readline.set_completer(complete)
     return raw_input('Enter %s: ' % message)
+
+def askToSave(dictarray, fields, header, invoiceable='0'):
+    if raw_input("Save to file? (y/n) ") == "y":
+        #Check to see if invoicing a single client
+        client=[]
+        for i in dictarray:
+            if i['Client'] not in client:
+                client.append(i['Client'])
+        if len(client) > 1:
+            client=''
+        else:
+            client=client[0]+"_"
+
+        defaultfilename = "Invoice_%s_%s%s.csv" % (getInvoiceNum(dictarray), client, getDate('-'))
+        print "Please enter a filename (default is %s)" % defaultfilename
+        filename=raw_input("> ")
+        if filename == "" : filename=defaultfilename
+
+        #Add rows for invoicing
+        totalTime, total, totalInvoiceable = calculateTotals(dictarray, invoiceable)
+        dictarray.append({})
+        dictarray.append({'Multiplier':'Total Time:','Total':totalTime})
+        dictarray.append({'Multiplier':'Total:','Total':total})
+        dictarray.append({'Multiplier':'Total Invoiceable:','Total':totalInvoiceable})
+
+        writeCSV(filename, dictarray, fields, header)
+
+#### Entry Starting, Stopping, and Calculating ####
 
 def startEntry(dictarray, quick):
     #creat new row
@@ -449,6 +435,8 @@ def selectEntryToEdit(dictarray, fields):
     dictarray[selection].update(newRow)
     return dictarray, newRow
 
+#### Invoicing Functions ####
+
 def getOutstanding(dictarray):
     temparray = []
     for i in dictarray:
@@ -465,18 +453,6 @@ def printOutstanding(dictarray):
                 temparray.append(row)
         printPretty(temparray)
     return
-
-def dateCompare(date1, date2): #Returns 2 dates with older date first
-    from datetime import date
-    date1, date2 = fixDate(date1), fixDate(date2)
-    [month1, day1, year1] = map(int, date1.split('/'))
-    [month2, day2, year2] = map(int, date2.split('/'))
-    tdate1 = date(year1, month1, day1)
-    tdate2 = date(year2, month2, day2)
-    if tdate1 < tdate2:
-        return date1, date2
-    else:
-        return date2, date1
 
 def markInvoicesPaid(dictarray):
     uninvoiced = getOutstanding(dictarray)
@@ -505,6 +481,45 @@ def markInvoicesPaid(dictarray):
 
     return dictarray
 
+def getInvoiceNum(dictarray):
+    InvoiceNum = 0
+    for i in dictarray:
+        if int(i['Invoice']) > InvoiceNum:
+            InvoiceNum = int(i['Invoice'])
+    return InvoiceNum
+
+def invoiceHours(dictarray, fields):
+    # Ask which client to invoice, 'a' for all
+    InvoiceNum = str(getInvoiceNum(dictarray)+1)
+    client = userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
+    if client == '': client = 'a'
+
+    # Copy uninvoiced lines to new array, print uninvoiced lines
+    invoicableArray=[]
+    for i in dictarray:
+        if i['Invoice'] == '0' and 'End' in i:
+            if client == 'a' or client == i['Client']:
+                invoicableArray.append(i)
+    for j in invoicableArray:
+        j.update({'Invoice':str(InvoiceNum)})
+    printPretty(invoicableArray, InvoiceNum)
+
+    company=""
+    header=company+",,,,,,,,,Invoice #,"+str(InvoiceNum)
+    abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
+    askToSave(invoicableArray, abrFields, header, InvoiceNum)
+
+    # Mark lines as invoiced after exporting file, return array
+    if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
+        for i in dictarray:
+            if i['Invoice'] == InvoiceNum and 'End' in i:
+                if client == 'a' or client == i['Client']:
+                    i.update({'Invoice':'0'})
+
+    return dictarray
+
+#### Main Menu and Options ####
+
 def additionalCommands():
     mPrint("-bold", "-yellow", "\nAdditional Commands:")
     mPrint("-bold", " e)", "-reset", "Edit an entry")
@@ -517,7 +532,7 @@ def additionalCommands():
     return
 
 def main(csvfilename, dictarray, fields):
-    #Main loop
+    # Main loop
     while 1:
         print ""
         clockIsOpen(dictarray, 1)
