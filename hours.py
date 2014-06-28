@@ -565,11 +565,11 @@ def main(csvfilename, dictarray, fields):
         elif Selection == "s": # Search
             temparray = searchDict(dictarray)
             printPretty(temparray)
-            askToSave(temparray)
+            askToSave(temparray, fields, "")
         elif Selection == "m": # Print by month
             temparray = searchByMonth(dictarray)
             printPretty(temparray)
-            askToSave(temparray)
+            askToSave(temparray, fields, "")
         elif Selection == "p": # Mark as paid
             dictarray = markInvoicesPaid(dictarray)
         elif Selection == "o": # Print outstanding invoices
