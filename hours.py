@@ -454,32 +454,45 @@ def printOutstanding(dictarray):
         printPretty(temparray)
     return
 
-def markInvoicesPaid(dictarray):
+def showUnpaidInvoices(dictarray, askToMark=0):
     uninvoiced = getOutstanding(dictarray)
 
     mPrint("-bold", "Outstanding Invoices")
     for i in uninvoiced:
         total = 0
+        client = ""
         dateStart, dateEnd = "1/1/9999", "1/1/1970"
         for row in dictarray:
             if row['Invoice'] == i:
                 dateStart = dateCompare(dateStart, row['Date'])[0]
                 dateEnd = dateCompare(dateEnd, row['Date'])[1]
                 total += float(row['Total'])
-        print "#%s\t(%s-%s,\t$%6.2f)" % ( i, dateStart, dateEnd, total)
+                if client.find(row['Client']) < 0:
+                    client = client+" "+str(row['Client'])
+        print "#%s $%7.2f\t(%s-%s, %s)" % ( i, total, dateStart, dateEnd, client)
     print
 
-    selection=raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
-    if selection == "" : selection = uninvoiced[-1]
-    if selection not in uninvoiced:
-        print "Not a valid invoice number."
-        return dictarray
+    if askToMark == 1:
+        selection = raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
+        if selection == "" : selection = uninvoiced[-1]
+        if selection not in uninvoiced:
+            print "Not a valid invoice number."
+            return dictarray
 
-    for i in dictarray:
-        if i['Invoice'] == selection:
-            i.update({'Paid':'Yes'})
+        for i in dictarray:
+            if i['Invoice'] == selection:
+                i.update({'Paid':'Yes'})
 
     return dictarray
+
+def searchForInvoice(dictarray):
+    InvoiceNum = 0
+    temparray = []
+    selection = int(raw_input("Please enter invoice number to search for: "))
+    for i in dictarray:
+        if int(i['Invoice']) == selection:
+            temparray.append(i)
+    return temparray
 
 def getInvoiceNum(dictarray):
     InvoiceNum = 0
@@ -523,9 +536,12 @@ def invoiceHours(dictarray, fields):
 def additionalCommands():
     mPrint("-bold", "-yellow", "\nAdditional Commands:")
     mPrint("-bold", " e)", "-reset", "Edit an entry")
-    mPrint("-bold", " a)", "-reset", "Print all hours")
-    mPrint("-bold", " m)", "-reset", "Print hours by month")
-    mPrint("-bold", " s)", "-reset", "Search")
+    mPrint("-bold", " sa)", "-reset", "Show all hours")
+    mPrint("-bold", " su)", "-reset", "Show un-invoiced hours")
+    mPrint("-bold", " so)", "-reset", "Show outstanding invoices")
+    mPrint("-bold", " sk)", "-reset", "Search by keyword")
+    mPrint("-bold", " sm)", "-reset", "Search by month and year")
+    mPrint("-bold", " si)", "-reset", "Search by invoice number")
     mPrint("-bold", " u)", "-reset", "Update hours from CSV file")
     mPrint("-bold", " r)", "-reset", "Re-calculate and re-sortCSV File")
     print ""
@@ -539,9 +555,8 @@ def main(csvfilename, dictarray, fields):
         mPrint("-bold", "-yellow", "\nPlease select option:")
         mPrint("-bold", " n)", "-reset", "Start New clock")
         mPrint("-bold", " c)", "-reset", "Close clock")
-        mPrint("-bold", " i)", "-reset", "Invoiced hours")
-        mPrint("-bold", " o)", "-reset", "Show outstanding invoices")
-        mPrint("-bold", " p)", "-reset", "Mark invoices number as paid")
+        mPrint("-bold", " i)", "-reset", "Create invoice")
+        mPrint("-bold", " p)", "-reset", "Mark invoice number as paid")
         mPrint("-bold", " ?)", "-reset", "Additional commands")
         mPrint("-bold", " q)", "-reset", "Quit")
         print ""
@@ -560,20 +575,26 @@ def main(csvfilename, dictarray, fields):
             printPretty([temparray])
         elif Selection == "i": # Invoice hours
             dictarray=invoiceHours(dictarray, fields)
-        elif Selection == "a": # Print all hours
+        elif Selection == "p": # Mark as paid
+            dictarray = showUnpaidInvoices(dictarray, 1)
+        elif Selection == "sa": # Print all hours
             printPretty(dictarray)
-        elif Selection == "s": # Search
+        elif Selection == "su": # Show un invoiced entries
+            dictarray = showUnpaidInvoices(dictarray, 0)
+        elif Selection == "so": # Show outstanding invoices
+            printOutstanding(dictarray)
+        elif Selection == "sk": # Search
             temparray = searchDict(dictarray)
             printPretty(temparray)
             askToSave(temparray, fields, "")
-        elif Selection == "m": # Print by month
+        elif Selection == "sm": # Search by month/year
             temparray = searchByMonth(dictarray)
             printPretty(temparray)
             askToSave(temparray, fields, "")
-        elif Selection == "p": # Mark as paid
-            dictarray = markInvoicesPaid(dictarray)
-        elif Selection == "o": # Print outstanding invoices
-            printOutstanding(dictarray)
+        elif Selection == "si": #Search by invoice number
+            temparray = searchForInvoice(dictarray)
+            printPretty(temparray)
+            askToSave(temparray, fields, "")
         elif Selection == "?": # Additional Commands
             additionalCommands()
         elif Selection == "r": # Resort, Recalc
