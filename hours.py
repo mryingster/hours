@@ -485,10 +485,11 @@ def showUnpaidInvoices(dictarray, askToMark=0):
 
     return dictarray
 
-def searchForInvoice(dictarray):
+def searchForInvoice(dictarray, selection=-1):
     InvoiceNum = 0
     temparray = []
-    selection = int(raw_input("Please enter invoice number to search for: "))
+    if selection == -1:
+        selection = int(raw_input("Please enter invoice number to search for: "))
     for i in dictarray:
         if int(i['Invoice']) == selection:
             temparray.append(i)
@@ -580,9 +581,11 @@ def main(csvfilename, dictarray, fields):
         elif Selection == "sa": # Print all hours
             printPretty(dictarray)
         elif Selection == "su": # Show un invoiced entries
-            dictarray = showUnpaidInvoices(dictarray, 0)
+            temparray = searchForInvoice(dictarray, 0)
+            printPretty(temparray)
         elif Selection == "so": # Show outstanding invoices
             printOutstanding(dictarray)
+            dictarray = showUnpaidInvoices(dictarray, 0)
         elif Selection == "sk": # Search
             temparray = searchDict(dictarray)
             printPretty(temparray)
