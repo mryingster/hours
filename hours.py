@@ -456,6 +456,7 @@ def printOutstanding(dictarray):
 
 def showUnpaidInvoices(dictarray, askToMark=0):
     uninvoiced = getOutstanding(dictarray)
+    totalOwed = 0
 
     mPrint("-bold", "Outstanding Invoices")
     for i in uninvoiced:
@@ -470,7 +471,9 @@ def showUnpaidInvoices(dictarray, askToMark=0):
                 if client.find(row['Client']) < 0:
                     client = client+" "+str(row['Client'])
         print "#%s $%7.2f\t(%s-%s, %s)" % ( i, total, dateStart, dateEnd, client)
+        totalOwed+=total
     print
+    print "Total outstanding amount: $%s" %totalOwed
 
     if askToMark == 1:
         selection = raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
