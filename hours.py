@@ -233,6 +233,7 @@ def calculateTotals(dictarray, invoiceable):
 #### Print to Screen Operations ####
 
 def printPrettyHeader():
+    print "" # Pretty white space!
     #                           0    5    10   15   20   25   30   35   40   45   50   55   60   65   70   75   80   85   90   95  100  105  110  115  120  125
     #                           |----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|----|
     mPrint("-bold", "-magenta", "            Start  End    Total      Sub    Multi")
@@ -569,10 +570,16 @@ def main(csvfilename, dictarray, fields):
         if Selection == "q":
             quit()
         elif Selection == "n": # New
-            if clockIsOpen(dictarray, 0): dictarray[-1].update(closeEntry(dictarray, 1))
+            if clockIsOpen(dictarray, 0):
+                dictarray[-1].update(closeEntry(dictarray, 1))
+                printPrettyHeader()
+                printPrettyLine(dictarray[-1])
             dictarray.append(startEntry(dictarray, 1))
         elif Selection == "c": # Close
-            if clockIsOpen(dictarray, 0): dictarray[-1].update(closeEntry(dictarray, 0))
+            if clockIsOpen(dictarray, 0):
+                dictarray[-1].update(closeEntry(dictarray, 0))
+                printPrettyHeader()
+                printPrettyLine(dictarray[-1])
             else: print "No clock to close"
         elif Selection == "e": # Edit
             dictarray, temparray = selectEntryToEdit(dictarray, fields)
