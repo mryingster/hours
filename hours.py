@@ -477,8 +477,9 @@ def showUnpaidInvoices(dictarray, askToMark=0):
     print "Total outstanding amount: $%s" %totalOwed
 
     if askToMark == 1:
-        selection = raw_input("Select invoice to mark as paid (default is %s): " % uninvoiced[-1])
-        if selection == "" : selection = uninvoiced[-1]
+        selection = raw_input("Select invoice to mark as paid (default: %s, 0: cancel): " % uninvoiced[0])
+        if selection == "" : selection = uninvoiced[0]
+        if selection == "0" : return dictarray
         if selection not in uninvoiced:
             print "Not a valid invoice number."
             return dictarray
