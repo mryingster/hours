@@ -41,7 +41,7 @@ def mPrint(*params):
     else:
         sys.stdout.write(plain_text+newline)
 
-def verifyFileExists(csvfilename, fields):
+def verifyCSVFileExists(csvfilename, fields):
     try:
         with open(csvfilename): pass
     except IOError:
@@ -49,6 +49,35 @@ def verifyFileExists(csvfilename, fields):
         with open(csvfilename, 'w') as csvfile:
             csvwriter = csv.DictWriter(csvfile, delimiter=',', fieldnames=fields)
             csvwriter.writerow(dict((fn,fn) for fn in fields)) #Write header row
+
+#### Configuration File Operations ####
+def readCFGFile(cfgfilename, configuration):
+    import re
+    with open(cfgfilename, 'r') as cfgfile:
+        for line in cfgfile:
+            line = line.strip()
+            key = re.compile("([^:]*):.*").sub(r'\1', line)
+            if key in configuration:
+                value = re.compile("[^:]*:(.*)").sub(r'\1', line)
+                configuration[key] = value
+    return configuration
+
+def updateCFGFile(cfgfilename, configuration={}):
+    with open(cfgfilename, 'w') as cfgfile:
+        cfgfile.write("COMPANY:%s\n" % raw_input('Enter Company Name: '))
+        cfgfile.write("EMAIL:%s\n"   % raw_input('Enter Email Address: '))
+        cfgfile.write("STREET:%s\n"  % raw_input('Enter Billing Street Address: '))
+        cfgfile.write("CITY:%s\n"    % raw_input('Enter City: '))
+        cfgfile.write("STATE:%s\n"   % raw_input('Enter State: '))
+        cfgfile.write("ZIP:%s\n"     % raw_input('Enter Zip: '))
+        cfgfile.write("RATE:%s\n"    % raw_input('Enter standard hourly rate: '))
+
+def verifyCFGFileExists(cfgfilename):
+    try:
+        with open(cfgfilename): pass
+    except IOError:
+        print "Creating new file,", cfgfilename
+        updateCFGFile(cfgfilename)
 
 #### CSV Operations ####
 
@@ -78,13 +107,13 @@ def genCSVRowFromDict(dict, fields):
         output = output+","
     return output
 
-def writeCSV(csvfilename, dictarray, fields, header=""):
+def writeCSV(csvfilename, dictarray, fields, header="", footer=""):
     with open(csvfilename, 'w') as csvfile:
-        if header != "":
-            csvfile.write(header+"\n")
+        if header != "": csvfile.write(header+"\n")
         csvfile.write(str(genCSVRowFromArray(fields))+"\n")
         for row in dictarray:
             csvfile.write(str(genCSVRowFromDict(row, fields))+"\n")
+        if footer != "": csvfile.write(footer+"\n")
         csvfile.close()
         return
 
@@ -304,7 +333,7 @@ def userInput(message, commands):
     readline.set_completer(complete)
     return raw_input('Enter %s: ' % message)
 
-def askToSave(dictarray, fields, header, invoiceable='0'):
+def askToSave(dictarray, fields, header, footer, invoiceable='0'):
     if raw_input("Save to file? (y/n) ") == "y":
         #Check to see if invoicing a single client
         client=[]
@@ -328,7 +357,7 @@ def askToSave(dictarray, fields, header, invoiceable='0'):
         dictarray.append({'Multiplier':'Total:','Total':total})
         dictarray.append({'Multiplier':'Total Invoiceable:','Total':totalInvoiceable})
 
-        writeCSV(filename, dictarray, fields, header)
+        writeCSV(filename, dictarray, fields, header, footer)
 
 #### Entry Starting, Stopping, and Calculating ####
 
@@ -507,7 +536,7 @@ def getInvoiceNum(dictarray):
             InvoiceNum = int(i['Invoice'])
     return InvoiceNum
 
-def invoiceHours(dictarray, fields):
+def invoiceHours(dictarray, fields, configuration):
     # Ask which client to invoice, 'a' for all
     InvoiceNum = str(getInvoiceNum(dictarray)+1)
     client = userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
@@ -523,10 +552,14 @@ def invoiceHours(dictarray, fields):
         j.update({'Invoice':str(InvoiceNum)})
     printPretty(invoicableArray, InvoiceNum)
 
-    company=""
-    header=company+",,,,,,,,,Invoice #,"+str(InvoiceNum)
+    header =  "%s,,,,,,,,,Invoice #%s,"% (configuration['COMPANY'], InvoiceNum)
+    footer =  "Please make invoices payable to:,,,,,,,,,,\n"
+    footer += "%s,,,,,,,,,,\n" % configuration["COMPANY"]
+    footer += "%s,,,,,,,,,,\n" % configuration["EMAIL"]
+    footer += "%s,,,,,,,,,,\n" % configuration["STREET"]
+    footer += "%s %s %s,,,,,,,,,," % (configuration["ZIP"], configuration["STATE"], configuration["ZIP"])
     abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
-    askToSave(invoicableArray, abrFields, header, InvoiceNum)
+    askToSave(invoicableArray, abrFields, header, footer, InvoiceNum)
 
     # Mark lines as invoiced after exporting file, return array
     if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
@@ -548,12 +581,13 @@ def additionalCommands():
     mPrint("-bold", " sk)", "-reset", "Search by keyword")
     mPrint("-bold", " sm)", "-reset", "Search by month and year")
     mPrint("-bold", " si)", "-reset", "Search by invoice number")
+    mPrint("-bold", " uc)", "-reset", "Update Configuration File Settings")
     mPrint("-bold", " u)", "-reset", "Update hours from CSV file")
     mPrint("-bold", " r)", "-reset", "Re-calculate and re-sortCSV File")
     print ""
     return
 
-def main(csvfilename, dictarray, fields):
+def main(csvfilename, dictarray, fields, configuration):
     # Main loop
     while 1:
         print ""
@@ -586,7 +620,7 @@ def main(csvfilename, dictarray, fields):
             dictarray, temparray = selectEntryToEdit(dictarray, fields)
             printPretty([temparray])
         elif Selection == "i": # Invoice hours
-            dictarray=invoiceHours(dictarray, fields)
+            dictarray=invoiceHours(dictarray, fields, configuration)
         elif Selection == "p": # Mark as paid
             dictarray = showUnpaidInvoices(dictarray, 1)
         elif Selection == "sa": # Print all hours
@@ -600,20 +634,22 @@ def main(csvfilename, dictarray, fields):
         elif Selection == "sk": # Search
             temparray = searchDict(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "")
+            askToSave(temparray, fields, "", "")
         elif Selection == "sm": # Search by month/year
             temparray = searchByMonth(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "")
+            askToSave(temparray, fields, "", "")
         elif Selection == "si": #Search by invoice number
             temparray = searchForInvoice(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "")
+            askToSave(temparray, fields, "", "")
         elif Selection == "?": # Additional Commands
             additionalCommands()
         elif Selection == "r": # Resort, Recalc
             dictarray = recalculateArray(dictarray)
             dictarray = resortArray(dictarray)
+        elif Selection == "uc": # Update CFG file
+            configuration = readCFGFile(configuration)
         elif Selection == "u": # Update CSV File
             dictarray = readCSV(csvfilename)
         else:
@@ -624,13 +660,17 @@ def main(csvfilename, dictarray, fields):
 #Variables
 csvfilename='hours.csv'
 fields=['Date', 'Start', 'End', 'Total Time', 'Rate', 'Sub Total', 'Multiplier', 'Total', 'Client', 'Project', 'Notes', 'Invoice', 'Paid']
-verifyFileExists(csvfilename, fields)
-
-#Import hours from file
+verifyCSVFileExists(csvfilename, fields)
 dictarray = readCSV(csvfilename)
+
+#Import configurations from file
+cfgfilename='hours.cfg'
+configuration={"COMPANY":"","EMAIL":"","STREET":"","CITY":"","STATE":"","ZIP":"","RATE":""}
+verifyCFGFileExists(cfgfilename)
+readCFGFile(cfgfilename, configuration)
 
 #Write backup file before making changes
 writeCSV(csvfilename+"~", dictarray, fields)
 
 #Start main program
-main(csvfilename, dictarray, fields)
+main(csvfilename, dictarray, fields, configuration)
