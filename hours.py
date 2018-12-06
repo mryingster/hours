@@ -1,5 +1,9 @@
 #!/usr/bin/python
-import csv, platform, sys
+import os, csv, platform, sys
+
+def error(message):
+    print("ERROR: %s" % message)
+    quit()
 
 def mPrint(*params):
     #Default Values
@@ -151,8 +155,11 @@ def dateCompare(date1, date2): #Returns 2 dates with older date first
         return date2, date1
 
 def subtractTime(start, end):
-    starthours, startminutes = start.split(":")
-    endhours, endminutes = end.split(":")
+    try:
+        starthours, startminutes = start.split(":")
+        endhours, endminutes = end.split(":")
+    except:
+        return "N/A"
     hours=int(endhours)-int(starthours)
     minutes=int(endminutes)-int(startminutes)
     while minutes < 0:
@@ -188,13 +195,7 @@ def multiplyTime(delta, rate):
 #### Money Operations ####
 
 def convertMoney(input):
-    input=str(input)
-    dollars, cents = input.split('.')
-    #Add zero before digits lower than 10
-    if int(cents) < 10 and not cents.startswith('0'): cents="0"+cents
-    #Round to two points
-    while int(cents) > 99: cents=str((int(cents)+05)/10)
-    return dollars+"."+cents
+    return "%.2f" % float(input)
 
 def clockIsOpen(dictarray, verbose):
     if len(dictarray) > 0:
@@ -244,18 +245,37 @@ def searchByMonth(dictarray):
             searchArray.append(dictionary)
     return(searchArray)
 
+def searchToday(dictarray):
+    searchArray = []
+    from datetime import datetime
+    searchMonth = datetime.date(datetime.now()).month
+    searchYear = datetime.date(datetime.now()).year
+    searchDay = datetime.date(datetime.now()).day
+
+    for dictionary in dictarray:
+        import re
+        if re.compile('%s/%s/%s'%(searchMonth, searchDay, searchYear)).match(dictionary['Date']):
+            searchArray.append(dictionary)
+    return(searchArray)
+
 def calculateTotals(dictarray, invoiceable):
     total = 0.0
     totalInvoiceable = 0.0
     totalTime = '0:00'
 
     for i in dictarray:
-        if 'End' not in i: continue #Skip non-completed rows...
+        # Skip non-completed rows...
+        if 'End' not in i or i['End'] == '': continue
+
+        # Get invoiceable amount
         if i['Total'] != '':
-            totalTime = addTime(totalTime, i['Total Time'])
             total += float(i['Total'])
             if i['Invoice'] == invoiceable:
                 totalInvoiceable += float(i['Total'])
+
+        # Get invoiceable time
+        if i['Total Time'] != "N/A":
+            totalTime = addTime(totalTime, i['Total Time'])
 
     return totalTime, total, totalInvoiceable
 
@@ -285,9 +305,21 @@ def printPretty(dictarray, invoiceable='0'):
     print ""
 
 def printPrettyLine(line):
-    print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-4s %s" %\
-        (line['Date'], line['Start'], line['End'], line['Total Time'], line['Rate'], line['Sub Total'], line['Multiplier'], \
-         line['Total'], line['Client'][0:10], line['Project'][0:20], line['Notes'][0:20], line['Invoice'], line['Paid'])
+    print "%-10s  %-5s  %-5s  %-4s  %-2s   %-5s  %-4s  %-5s  %-10s  %-20s  %-20s  %-4s %s" % (
+        line['Date'],
+        line['Start']      if line['Start'] != "N/A" else "",
+        line['End']        if line['Start'] != "N/A" else "",
+        line['Total Time'] if line['Start'] != "N/A" else "",
+        line['Rate']       if line['Start'] != "N/A" else "",
+        line['Sub Total']  if line['Start'] != "N/A" else "",
+        line['Multiplier'] if line['Start'] != "N/A" else "",
+        line['Total'],
+        line['Client'][0:10],
+        line['Project'][0:20],
+        line['Notes'][0:20],
+        line['Invoice'],
+        line['Paid']
+    )
 
 #### Auto-Complete, and User Input Functions ####
 
@@ -315,7 +347,7 @@ def getNotes(dictarray, client, project):
                     notes.append(i['Notes'])
     return notes
 
-def userInput(message, commands):
+def userInput(message, commands=[]):
     import readline
     import rlcompleter
     if 'libedit' in readline.__doc__:
@@ -362,7 +394,7 @@ def askToSave(dictarray, fields, header, footer, invoiceable='0'):
 #### Entry Starting, Stopping, and Calculating ####
 
 def startEntry(dictarray, quick):
-    #creat new row
+    #create new row
     newrow={}
 
     client=userInput("Client", getClients(dictarray))
@@ -374,34 +406,44 @@ def startEntry(dictarray, quick):
     if quick == 1:
         for old in range(len(dictarray)-1, -1, -1):
             if dictarray[old]['Client'] == client:
-                rate=dictarray[old]['Rate']
-                break
+                if dictarray[old]['Rate'] != "N/A":
+                    rate = dictarray[old]['Rate']
+                    break
 
     if rate == "0":
         rate=raw_input("Rate: ")
 
-    newrow.update({'Date':getDate()})
-    newrow.update({'Start':getTime()})
-    newrow.update({'Rate':rate})
-    newrow.update({'Client':client})
-    newrow.update({'Project':project})
-    newrow.update({'Notes':notes})
-    newrow.update({'Invoice':'0'})
-    newrow.update({'Paid':'No'})
+    newrow.update({'Date'       : getDate(),
+                   'Start'      : getTime(),
+                   'Rate'       : rate,
+                   'Client'     : client,
+                   'Project'    : project,
+                   'Notes'      : notes,
+                   'Invoice'    : '0',
+                   'Paid'       : 'No',
+                   'End'        : '',
+                   'Total Time' : '',
+                   'Sub Total'  : '',
+                   'Multiplier' : '',
+                   'Total'      : ''})
 
     return newrow
 
 def calculateEntry(start, end, rate, multiplier):
-    appendrow={}
-    appendrow.update({'End':end})
-    appendrow.update({'Total Time':subtractTime(start, appendrow['End'])})
-    appendrow.update({'Sub Total':multiplyTime(appendrow['Total Time'], float(rate))})
-    appendrow.update({'Multiplier':multiplier})
-    appendrow.update({'Total':convertMoney(float(appendrow['Sub Total'])*float(multiplier))})
-    return appendrow
+    totaltime = subtractTime(start, end)
+    subtotal  = multiplyTime(totaltime, float(rate))
+    total     = convertMoney(float(subtotal)*float(multiplier))
+
+    return {'End'        : end,
+            'Total Time' : totaltime,
+            'Sub Total'  : subtotal,
+            'Multiplier' : multiplier,
+            'Total'      : total}
 
 def recalculateArray(dictarray):
     for row in dictarray:
+        # Skip Invoicable Purchases
+        if row['Start'] == "N/A": continue
         row.update(calculateEntry(row['Start'],row['End'],row['Rate'],row['Multiplier']))
         row.update({'Date':fixDate(row['Date'])})
     return dictarray
@@ -426,20 +468,29 @@ def closeEntry(dictarray, quick):
     return appendrow
 
 def editEntry(dictarray, fields, line):
-    appendrow={}
+    appendrow=dictarray[line]
     for field in fields:
-        if field in ['Total Time','Sub Total','Total']: continue #skip calculated fields
-        print "Enter new value for", field, "(current value:", dictarray[line][field]+")"
+        #skip calculated fields
+        if field in ['Total Time','Sub Total']: continue
+        if field == "Total" and dictarray[line]["Start"] != "N/A": continue
+
+        # Get user input
+        print "Enter new value for", field, "(current value:", appendrow[field]+")"
+
+        # Update if changed
         input=raw_input("> ")
         if input!='':
             appendrow.update({field:input})
-        else:
-            appendrow.update({field:dictarray[line][field]})
 
-    #Recalculate values if clock is closed
-    if appendrow['End'] != '':
-        if appendrow['Multiplier'] == "" : appendrow.update({'Multiplier':"1.0"}) #Make it default value if unspecified
-        appendrow.update(calculateEntry(appendrow['Start'], appendrow['End'], appendrow['Rate'], appendrow['Multiplier']))
+    # If this is an open clock, or invoiceable good, we are done
+    if appendrow['End'] == '' or appendrow['Start'] == "N/A":
+        return appendrow
+
+    # Recalculate values if clock is closed, and not invoiceable goods
+    if appendrow['Multiplier'] == "" :
+        appendrow.update({'Multiplier':"1.0"}) #Make it default value if unspecified
+    appendrow.update(calculateEntry(appendrow['Start'], appendrow['End'], appendrow['Rate'], appendrow['Multiplier']))
+
     return appendrow
 
 def selectEntryToEdit(dictarray, fields):
@@ -464,6 +515,50 @@ def selectEntryToEdit(dictarray, fields):
     newRow = editEntry(dictarray, fields, selection)
     dictarray[selection].update(newRow)
     return dictarray, newRow
+
+def manualEntry(dictarray, fields):
+    appendrow={}
+    for field in fields:
+        if field in ['Total Time','Sub Total','Total']: continue # skip calculated fields
+        print "Enter new value for", field
+        input=raw_input("> ")
+        while input == "":
+            print "Please enter value!"
+            input=raw_input("> ")
+        else:
+            appendrow.update({field:input})
+
+    # Recalculate values if clock is closed
+    if appendrow['End'] != '':
+        if appendrow['Multiplier'] == "" : appendrow.update({'Multiplier':"1.0"}) # Make it default value if unspecified
+        appendrow.update(calculateEntry(appendrow['Start'], appendrow['End'], appendrow['Rate'], appendrow['Multiplier']))
+    return appendrow
+
+def goods(dictarray, fields):
+    appendrow={}
+
+    client=userInput("Client", getClients(dictarray))
+    project=userInput("Project", getProjects(dictarray, client))
+    notes=userInput("Notes", getNotes(dictarray, client, project))
+    cost=userInput("Cost")
+
+    appendrow.update({'Start'      : 'N/A',
+                      'End'        : 'N/A',
+                      'Total Time' : 'N/A',
+                      'Rate'       : 'N/A',
+                      'Sub Total'  : 'N/A',
+                      'Multiplier' : 'N/A',
+
+                      'Date'       : getDate(),
+                      'Total'      : convertMoney(cost),
+
+                      'Client'     : client,
+                      'Project'    : project,
+                      'Notes'      : notes,
+
+                      'Invoice'    : '0',
+                      'Paid'       : 'No'})
+    return appendrow
 
 #### Invoicing Functions ####
 
@@ -542,7 +637,7 @@ def invoiceHours(dictarray, fields, configuration):
     client = userInput("Select a client to invoice ('a' for all)", getClients(dictarray))
     if client == '': client = 'a'
 
-    # Copy uninvoiced lines to new array, print uninvoiced lines
+    # Copy uninvoiced lines to new array, print uninvoiced lines to screen
     invoicableArray=[]
     for i in dictarray:
         if i['Invoice'] == '0' and 'End' in i:
@@ -557,7 +652,7 @@ def invoiceHours(dictarray, fields, configuration):
     footer += "%s,,,,,,,,,,\n" % configuration["COMPANY"]
     footer += "%s,,,,,,,,,,\n" % configuration["EMAIL"]
     footer += "%s,,,,,,,,,,\n" % configuration["STREET"]
-    footer += "%s %s %s,,,,,,,,,," % (configuration["ZIP"], configuration["STATE"], configuration["ZIP"])
+    footer += "%s %s %s,,,,,,,,,," % (configuration["CITY"], configuration["STATE"], configuration["ZIP"])
     abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
     askToSave(invoicableArray, abrFields, header, footer, InvoiceNum)
 
@@ -574,16 +669,18 @@ def invoiceHours(dictarray, fields, configuration):
 
 def additionalCommands():
     mPrint("-bold", "-yellow", "\nAdditional Commands:")
-    mPrint("-bold", " e)", "-reset", "Edit an entry")
+    mPrint("-bold", " e) ", "-reset", "Edit an entry")
+    mPrint("-bold", " u) ", "-reset", "Update hours from CSV file")
+    mPrint("-bold", " r) ", "-reset", "Re-calculate and re-sortCSV File")
+    mPrint("-bold", " m) ", "-reset", "Manually enter invoiceable time")
     mPrint("-bold", " sa)", "-reset", "Show all hours")
     mPrint("-bold", " su)", "-reset", "Show un-invoiced hours")
     mPrint("-bold", " so)", "-reset", "Show outstanding invoices")
     mPrint("-bold", " sk)", "-reset", "Search by keyword")
     mPrint("-bold", " sm)", "-reset", "Search by month and year")
+    mPrint("-bold", " st)", "-reset", "Show today's total")
     mPrint("-bold", " si)", "-reset", "Search by invoice number")
     mPrint("-bold", " uc)", "-reset", "Update Configuration File Settings")
-    mPrint("-bold", " u)", "-reset", "Update hours from CSV file")
-    mPrint("-bold", " r)", "-reset", "Re-calculate and re-sortCSV File")
     print ""
     return
 
@@ -595,6 +692,7 @@ def main(csvfilename, dictarray, fields, configuration):
         mPrint("-bold", "-yellow", "\nPlease select option:")
         mPrint("-bold", " n)", "-reset", "Start New clock")
         mPrint("-bold", " c)", "-reset", "Close clock")
+        mPrint("-bold", " g)", "-reset", "Add invoiceable goods")
         mPrint("-bold", " i)", "-reset", "Create invoice")
         mPrint("-bold", " p)", "-reset", "Mark invoice number as paid")
         mPrint("-bold", " ?)", "-reset", "Additional commands")
@@ -616,6 +714,10 @@ def main(csvfilename, dictarray, fields, configuration):
                 printPrettyHeader()
                 printPrettyLine(dictarray[-1])
             else: print "No clock to close"
+        elif Selection == "g": # Invoiceable goods
+            dictarray.append(goods(dictarray, fields))
+            printPrettyHeader()
+            printPrettyLine(dictarray[-1])
         elif Selection == "e": # Edit
             dictarray, temparray = selectEntryToEdit(dictarray, fields)
             printPretty([temparray])
@@ -643,6 +745,10 @@ def main(csvfilename, dictarray, fields, configuration):
             temparray = searchForInvoice(dictarray)
             printPretty(temparray)
             askToSave(temparray, fields, "", "")
+        elif Selection == "st": #Show today
+            temparray = searchToday(dictarray)
+            printPretty(temparray)
+            askToSave(temparray, fields, "", "")
         elif Selection == "?": # Additional Commands
             additionalCommands()
         elif Selection == "r": # Resort, Recalc
@@ -652,6 +758,8 @@ def main(csvfilename, dictarray, fields, configuration):
             configuration = readCFGFile(configuration)
         elif Selection == "u": # Update CSV File
             dictarray = readCSV(csvfilename)
+        elif Selection == "m": # Manual Entry
+            dictarray.append(manualEntry(dictarray, fields))
         else:
             print "Unknown selection..."
         #After each command, write to file...
