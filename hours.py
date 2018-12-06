@@ -631,6 +631,103 @@ def getInvoiceNum(dictarray):
             InvoiceNum = int(i['Invoice'])
     return InvoiceNum
 
+def createSvgInvoice(dictarray, invoiceNum, configuration):
+    entrytemplate="""
+        <rect x="37" y="$RECTPOS" fill="$COLOR" width="538" height="18"/>
+	<text transform="matrix(1 0 0 1  42.335 $POS)" font-family="'CenturyGothic'" font-size="10">$DATE</text>
+	<text transform="matrix(1 0 0 1 115.668 $POS)" font-family="'CenturyGothic'" font-size="10">$DESCRIPTION</text>
+	<text transform="matrix(1 0 0 1 422.332 $POS)" font-family="'CenturyGothic'" font-size="10">$TIME</text>
+	<text transform="matrix(1 0 0 1 500.334 $POS)" font-family="'CenturyGothic'" font-size="10">$SUBTOTAL</text>
+"""
+    entryColor = ["#FAFAFA", "#FFFFFF"]
+    entryVertPos = 197
+    clients = []
+    total = 0
+    linesBuffer = ""
+
+    for entry in dictarray:
+        clients.append(entry["Client"])
+        total += float(entry["Total"])
+
+        temp = entrytemplate
+        temp = temp.replace("$COLOR",       entryColor[dictarray.index(entry) % 2])
+        temp = temp.replace("$POS",         str(entryVertPos))
+        temp = temp.replace("$RECTPOS",     str(entryVertPos-13))
+        temp = temp.replace("$DATE",        entry["Date"])
+        temp = temp.replace("$DESCRIPTION", "%s %s" % (entry["Project"], entry["Notes"]))
+        temp = temp.replace("$TIME",        entry["Total Time"])
+        temp = temp.replace("$SUBTOTAL",    "$%0.2f" % float(entry["Total"]))
+
+        linesBuffer += temp
+
+        entryVertPos += 18
+
+    client = ", ".join(set(clients))
+
+    # Load Template File
+    f = open("template.svg", "r")
+    buf = f.read()
+
+    # Replace content
+    buf = buf.replace("$COMPANY",       configuration["COMPANY"])
+    buf = buf.replace("$EMAIL",         configuration["EMAIL"])
+    buf = buf.replace("$ADDRESS",       configuration["STREET"])
+    buf = buf.replace("$CITY",          configuration["CITY"])
+    buf = buf.replace("$STATE",         configuration["STATE"])
+    buf = buf.replace("$ZIP",           configuration["ZIP"])
+    buf = buf.replace("$INVOICENUMBER", invoiceNum)
+    buf = buf.replace("$CLIENT",        client)
+    buf = buf.replace("$INVOICEDATE",   getDate())
+    buf = buf.replace("$TOTAL",         "$%0.2f" % total)
+
+    buf = buf.replace("<!-- INSERT LINES -->", linesBuffer)
+
+    filename = "Invoice_%s_%s_%s" % (invoiceNum, "-".join(set(clients)), getDate('-'))
+
+    with open(filename+".svg", 'w') as svgfile:
+        svgfile.write(buf)
+        svgfile.close()
+
+    createPDFFile(filename+".svg", filename+".pdf")
+
+
+def findInkscape():
+    inkscapeScriptPath = ""
+    inkscapePath = ""
+
+    # Default Location(s)
+    checkPaths = ["/Applications",
+                  "/Volumes/Documents/Applications/"]
+
+    # Check in default locations for application
+    for path in checkPaths:
+        checkPath = os.path.join(path, "Inkscape.app")
+        if os.path.isdir(checkPath):
+            inkscapePath = checkPath
+            break
+
+    # If not found...
+    if inkscapePath == "":
+        error("Unable to locate Inkscape application")
+
+    # Look for scripting engine
+    scriptPath = "Contents/Resources/script"
+    inkscapeScriptPath = os.path.join(inkscapePath, scriptPath)
+    if not os.path.isfile(inkscapeScriptPath):
+        error("Unable to locate Inkscape Scripting Binary")
+
+    return inkscapeScriptPath
+
+def createPDFFile(svgFile, pdfFile):
+    inkscape = findInkscape()
+
+    # Get current path
+    path = os.path.abspath(".")
+
+    import subprocess
+    subprocess.call([inkscape, os.path.join(path, svgFile), "--export-pdf=%s" % os.path.join(path, pdfFile), "--without-gui"])
+    return pdfFile
+
 def invoiceHours(dictarray, fields, configuration):
     # Ask which client to invoice, 'a' for all
     InvoiceNum = str(getInvoiceNum(dictarray)+1)
@@ -647,14 +744,20 @@ def invoiceHours(dictarray, fields, configuration):
         j.update({'Invoice':str(InvoiceNum)})
     printPretty(invoicableArray, InvoiceNum)
 
-    header =  "%s,,,,,,,,,Invoice #%s,"% (configuration['COMPANY'], InvoiceNum)
-    footer =  "Please make invoices payable to:,,,,,,,,,,\n"
-    footer += "%s,,,,,,,,,,\n" % configuration["COMPANY"]
-    footer += "%s,,,,,,,,,,\n" % configuration["EMAIL"]
-    footer += "%s,,,,,,,,,,\n" % configuration["STREET"]
-    footer += "%s %s %s,,,,,,,,,," % (configuration["CITY"], configuration["STATE"], configuration["ZIP"])
-    abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
-    askToSave(invoicableArray, abrFields, header, footer, InvoiceNum)
+    # Save PDF
+    try:
+        createSvgInvoice(invoicableArray, InvoiceNum, configuration)
+
+    # Save CSV file if PDF doesn't work
+    except:
+        header =  "%s,,,,,,,,,Invoice #%s,"% (configuration['COMPANY'], InvoiceNum)
+        footer =  "Please make invoices payable to:,,,,,,,,,,\n"
+        footer += "%s,,,,,,,,,,\n" % configuration["COMPANY"]
+        footer += "%s,,,,,,,,,,\n" % configuration["EMAIL"]
+        footer += "%s,,,,,,,,,,\n" % configuration["STREET"]
+        footer += "%s %s %s,,,,,,,,,," % (configuration["CITY"], configuration["STATE"], configuration["ZIP"])
+        abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
+        askToSave(invoicableArray, abrFields, header, footer, InvoiceNum)
 
     # Mark lines as invoiced after exporting file, return array
     if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
