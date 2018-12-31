@@ -365,31 +365,53 @@ def userInput(message, commands=[]):
     readline.set_completer(complete)
     return raw_input('Enter %s: ' % message)
 
-def askToSave(dictarray, fields, header, footer, invoiceable='0'):
-    if raw_input("Save to file? (y/n) ") == "y":
-        #Check to see if invoicing a single client
-        client=[]
-        for i in dictarray:
-            if i['Client'] not in client:
-                client.append(i['Client'])
-        if len(client) > 1:
-            client=''
-        else:
-            client=client[0]+"_"
+def askToSave(dictarray, fields, configuration, invoice='0'):
+    if raw_input("Save to file? (y/n) ") != "y":
+        return
 
-        defaultfilename = "Invoice_%s_%s%s.csv" % (getInvoiceNum(dictarray), client, getDate('-'))
-        print "Please enter a filename (default is %s)" % defaultfilename
-        filename=raw_input("> ")
-        if filename == "" : filename=defaultfilename
+    #Check to see if invoicing a single client
+    client = []
+    for i in dictarray:
+        if i['Client'] not in client:
+            client.append(i['Client'])
+    if len(client) > 1:
+        client = ''
+    else:
+        client = client[0] + "_"
 
-        #Add rows for invoicing
-        totalTime, total, totalInvoiceable = calculateTotals(dictarray, invoiceable)
+    # Create default filename
+    defaultfilename = "Invoice_%s_%s%s" % (getInvoiceNum(dictarray), client, getDate('-'))
+    print "Please enter a filename (default is %s)" % defaultfilename
+    filename = raw_input("> ")
+    if filename == "" : filename = defaultfilename
+
+    # Save CSV file
+    if raw_input("Save as CSV? (y/n) ") == "y":
+
+        # Add header and footer only for invoice
+        header, footer = "", ""
+        if invoice != '0':
+            header =  "%s,,,,,,,,,Invoice #%s,"% (configuration['COMPANY'], InvoiceNum)
+            footer =  "Please make invoices payable to:,,,,,,,,,,\n"
+            footer += "%s,,,,,,,,,,\n"     %  configuration["COMPANY"]
+            footer += "%s,,,,,,,,,,\n"     %  configuration["EMAIL"]
+            footer += "%s,,,,,,,,,,\n"     %  configuration["STREET"]
+            footer += "%s %s %s,,,,,,,,,," % (configuration["CITY"], configuration["STATE"], configuration["ZIP"])
+
+        # Add rows for invoicing
+        totalTime, total, totalInvoiceable = calculateTotals(dictarray, invoice)
         dictarray.append({})
         dictarray.append({'Multiplier':'Total Time:','Total':totalTime})
         dictarray.append({'Multiplier':'Total:','Total':total})
         dictarray.append({'Multiplier':'Total Invoiceable:','Total':totalInvoiceable})
 
-        writeCSV(filename, dictarray, fields, header, footer)
+        writeCSV(filename+".csv", dictarray, fields, header, footer)
+
+    # Save SVG/PDF file(s)
+    if raw_input("Save as PDF? (y/n) ") == "y":
+        createSvgInvoice(dictarray, invoice, configuration)
+
+    return
 
 #### Entry Starting, Stopping, and Calculating ####
 
@@ -744,20 +766,10 @@ def invoiceHours(dictarray, fields, configuration):
         j.update({'Invoice':str(InvoiceNum)})
     printPretty(invoicableArray, InvoiceNum)
 
-    # Save PDF
-    try:
-        createSvgInvoice(invoicableArray, InvoiceNum, configuration)
+    # Remove fields we don't want to save
+    abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
 
-    # Save CSV file if PDF doesn't work
-    except:
-        header =  "%s,,,,,,,,,Invoice #%s,"% (configuration['COMPANY'], InvoiceNum)
-        footer =  "Please make invoices payable to:,,,,,,,,,,\n"
-        footer += "%s,,,,,,,,,,\n" % configuration["COMPANY"]
-        footer += "%s,,,,,,,,,,\n" % configuration["EMAIL"]
-        footer += "%s,,,,,,,,,,\n" % configuration["STREET"]
-        footer += "%s %s %s,,,,,,,,,," % (configuration["CITY"], configuration["STATE"], configuration["ZIP"])
-        abrFields = [x for x in fields if x not in ['Invoice', 'Paid'] ]
-        askToSave(invoicableArray, abrFields, header, footer, InvoiceNum)
+    askToSave(invoicableArray, abrFields, configuration, InvoiceNum)
 
     # Mark lines as invoiced after exporting file, return array
     if raw_input('Mark lines as invoiced? (y/n): ') != 'y':
@@ -825,7 +837,7 @@ def main(csvfilename, dictarray, fields, configuration):
             dictarray, temparray = selectEntryToEdit(dictarray, fields)
             printPretty([temparray])
         elif Selection == "i": # Invoice hours
-            dictarray=invoiceHours(dictarray, fields, configuration)
+            dictarray = invoiceHours(dictarray, fields, configuration)
         elif Selection == "p": # Mark as paid
             dictarray = showUnpaidInvoices(dictarray, 1)
         elif Selection == "sa": # Print all hours
@@ -839,19 +851,19 @@ def main(csvfilename, dictarray, fields, configuration):
         elif Selection == "sk": # Search
             temparray = searchDict(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "", "")
+            askToSave(temparray, fields, configuration)
         elif Selection == "sm": # Search by month/year
             temparray = searchByMonth(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "", "")
+            askToSave(temparray, fields, configuration)
         elif Selection == "si": #Search by invoice number
             temparray = searchForInvoice(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "", "")
+            askToSave(temparray, fields, configuration)
         elif Selection == "st": #Show today
             temparray = searchToday(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, "", "")
+            askToSave(temparray, fields, configuration)
         elif Selection == "?": # Additional Commands
             additionalCommands()
         elif Selection == "r": # Resort, Recalc
