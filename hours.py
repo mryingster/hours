@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/env python
 import os, csv, platform, sys
 
 def error(message):
@@ -140,7 +140,7 @@ def fixDate(datein):
     from datetime import date
     [month, day, year] = map(int, datein.split('/'))
     if year < 100 : year += 2000
-    return "%s/%s/%s" % (month, day, year)
+    return "%02i/%02i/%s" % (month, day, year)
 
 def dateCompare(date1, date2): #Returns 2 dates with older date first
     from datetime import date
@@ -168,7 +168,7 @@ def subtractTime(start, end):
     #Compensate for crossing over midnight
     if hours < 0 : hours = hours + 24
     #Use minimum time if less than minimum time
-    minimumtime = 5
+    minimumtime = 15
     if hours == 0 and minutes < minimumtime: minutes = minimumtime
     #Add leading 0 to numbers less than 10
     if minutes < 10: minutes = '0'+str(minutes)
@@ -464,10 +464,10 @@ def calculateEntry(start, end, rate, multiplier):
 
 def recalculateArray(dictarray):
     for row in dictarray:
+        row.update({'Date':fixDate(row['Date'])})
         # Skip Invoicable Purchases
         if row['Start'] == "N/A": continue
         row.update(calculateEntry(row['Start'],row['End'],row['Rate'],row['Multiplier']))
-        row.update({'Date':fixDate(row['Date'])})
     return dictarray
 
 def resortArray(dictarray):
@@ -636,6 +636,22 @@ def showUnpaidInvoices(dictarray, askToMark=0):
 
     return dictarray
 
+def printAllInvoices(dictarray):
+    invoices = {}
+    for line in dictarray:
+        invoice = line['Invoice']
+        amount  = 0 if invoice not in invoices else invoices[invoice]["amount"]
+        amount += float(line["Total"])
+        invoices.update({
+            invoice : {
+                 "amount" : amount,
+                 "date"   : line["Date"],
+                }
+        })
+    for key in sorted(invoices.keys()):
+        print("Invoice: %-4s  Date: %-10s  Amount: %s" % (key, invoices[key]["date"], invoices[key]["amount"]))
+    return
+
 def searchForInvoice(dictarray, selection=-1):
     InvoiceNum = 0
     temparray = []
@@ -645,6 +661,18 @@ def searchForInvoice(dictarray, selection=-1):
         if int(i['Invoice']) == selection:
             temparray.append(i)
     return temparray
+
+def printInvoiceSummary(dictarray, year=2021):
+    invoices = {}
+    for row in dictarray:
+        if row['Date'].split('/')[-1][-2:] == str(year)[-2:]:
+            if row["Invoice"] not in invoices:
+                invoices.update({row["Invoice"] : 0})
+            invoices[row["Invoice"]] += float(row["Total"])
+
+    for invoice in sorted(invoices):
+        print("%s $%0.2f" % (invoice, invoices[invoice]))
+    return
 
 def getInvoiceNum(dictarray):
     InvoiceNum = 0
@@ -733,7 +761,7 @@ def findInkscape():
         error("Unable to locate Inkscape application")
 
     # Look for scripting engine
-    scriptPath = "Contents/Resources/script"
+    scriptPath = "Contents/MacOS/inkscape" #"Contents/Resources/script"
     inkscapeScriptPath = os.path.join(inkscapePath, scriptPath)
     if not os.path.isfile(inkscapeScriptPath):
         error("Unable to locate Inkscape Scripting Binary")
@@ -856,14 +884,19 @@ def main(csvfilename, dictarray, fields, configuration):
             temparray = searchByMonth(dictarray)
             printPretty(temparray)
             askToSave(temparray, fields, configuration)
-        elif Selection == "si": #Search by invoice number
+        elif Selection == "is": # Invoice Summary
+            printInvoiceSummary(dictarray)
+        elif Selection == "si": # Search by invoice number
             temparray = searchForInvoice(dictarray)
             printPretty(temparray)
-            askToSave(temparray, fields, configuration)
-        elif Selection == "st": #Show today
+            invoiceNumber = temparray[0]['Invoice']
+            askToSave(temparray, fields, configuration, invoiceNumber)
+        elif Selection == "st": # Show today
             temparray = searchToday(dictarray)
             printPretty(temparray)
             askToSave(temparray, fields, configuration)
+        elif Selection == "li": # List Invoices
+            printAllInvoices(dictarray)
         elif Selection == "?": # Additional Commands
             additionalCommands()
         elif Selection == "r": # Resort, Recalc
